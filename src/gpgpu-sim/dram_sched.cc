@@ -34,8 +34,8 @@
 
 frfcfs_scheduler::frfcfs_scheduler(const memory_config *config, dram_t *dm,
                                    memory_stats_t *stats) {
-  m_config = config;
-  m_stats = stats;
+  m_config = config; // bank개수 등등 memory config내용
+  m_stats = stats; // 
   m_num_pending = 0; // buffer에 pending하고 있는 request의 개수
   m_num_write_pending = 0; 
   m_dram = dm;
@@ -142,7 +142,7 @@ dram_req_t *frfcfs_scheduler::schedule(unsigned bank, unsigned curr_row) {
 
     std::map<unsigned, std::list<std::list<dram_req_t *>::iterator> >::iterator
         bin_ptr = m_current_bins[bank].find(curr_row);
-    if (bin_ptr == m_current_bins[bank].end()) { //현재 serive되고 있던 row에 해당하는 list가 전부 소진되었을 경우
+    if (bin_ptr == m_current_bins[bank].end()) { //현재 serive되고 있던 row와 동일한 row를 가진 req_list가 없다. 따라서 request_queue에서 FIFO 정책으로 하나를 가져오자.
       dram_req_t *req = m_current_queue[bank].back(); // FIFO 정책에 따라 request queue중에 가장 오래된 것을 다음 req로 설정
       bin_ptr = m_current_bins[bank].find(req->row);
       assert(bin_ptr !=
@@ -209,6 +209,7 @@ void frfcfs_scheduler::print(FILE *fp) {
 void dram_t::scheduler_frfcfs() {
   unsigned mrq_latency;
   frfcfs_scheduler *sched = m_frfcfs_scheduler;
+  // mrqq : L2 miss난 애들이 FIFO에 저장되어 있는 것들
   while (!mrqq->empty()) {
     dram_req_t *req = mrqq->pop();
 
