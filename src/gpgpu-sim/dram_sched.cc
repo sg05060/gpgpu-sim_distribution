@@ -36,16 +36,16 @@ frfcfs_scheduler::frfcfs_scheduler(const memory_config *config, dram_t *dm,
                                    memory_stats_t *stats) {
   m_config = config;
   m_stats = stats;
-  m_num_pending = 0;
-  m_num_write_pending = 0;
+  m_num_pending = 0; // buffer에 pending하고 있는 request의 개수
+  m_num_write_pending = 0; 
   m_dram = dm;
-  m_queue = new std::list<dram_req_t *>[m_config->nbk];
+  m_queue = new std::list<dram_req_t *>[m_config->nbk]; // 단순히 request를 순차적으로 저장하는 queue.
   m_bins = new std::map<
-      unsigned, std::list<std::list<dram_req_t *>::iterator> >[m_config->nbk];
+      unsigned, std::list<std::list<dram_req_t *>::iterator> >[m_config->nbk]; // Map(key, value), key = row, value = req list
   m_last_row =
-      new std::list<std::list<dram_req_t *>::iterator> *[m_config->nbk];
-  curr_row_service_time = new unsigned[m_config->nbk];
-  row_service_timestamp = new unsigned[m_config->nbk];
+      new std::list<std::list<dram_req_t *>::iterator> *[m_config->nbk]; // bins에서 선택한 value (= req list)
+  curr_row_service_time = new unsigned[m_config->nbk]; // Bank별로 현재 row가 service되고 있는 time
+  row_service_timestamp = new unsigned[m_config->nbk]; // ?
   for (unsigned i = 0; i < m_config->nbk; i++) {
     m_queue[i].clear();
     m_bins[i].clear();
@@ -53,7 +53,7 @@ frfcfs_scheduler::frfcfs_scheduler(const memory_config *config, dram_t *dm,
     curr_row_service_time[i] = 0;
     row_service_timestamp[i] = 0;
   }
-  if (m_config->seperate_write_queue_enabled) {
+  if (m_config->seperate_write_queue_enabled) { // request queue를 read/write로 세분화하여 구분한다.
     m_write_queue = new std::list<dram_req_t *>[m_config->nbk];
     m_write_bins = new std::map<
         unsigned, std::list<std::list<dram_req_t *>::iterator> >[m_config->nbk];
@@ -70,14 +70,15 @@ frfcfs_scheduler::frfcfs_scheduler(const memory_config *config, dram_t *dm,
 }
 
 void frfcfs_scheduler::add_req(dram_req_t *req) {
-  if (m_config->seperate_write_queue_enabled && req->data->is_write()) {
+  if (m_config->seperate_write_queue_enabled && req->data->is_write()) { //write queue가 구분되어 있고 현재 write req가 들어왔을 때
     assert(m_num_write_pending < m_config->gpgpu_frfcfs_dram_write_queue_size);
     m_num_write_pending++;
     m_write_queue[req->bk].push_front(req);
     std::list<dram_req_t *>::iterator ptr = m_write_queue[req->bk].begin();
+    // Open Page를 위해 같은 row 끼리 req를 모으는 형식
     m_write_bins[req->bk][req->row].push_front(ptr);  // newest reqs to the
                                                       // front
-  } else {
+  } else { //위와 동일
     assert(m_num_pending < m_config->gpgpu_frfcfs_dram_sched_queue_size);
     m_num_pending++;
     m_queue[req->bk].push_front(req);
@@ -115,6 +116,7 @@ dram_req_t *frfcfs_scheduler::schedule(unsigned bank, unsigned curr_row) {
   std::list<std::list<dram_req_t *>::iterator> **m_current_last_row =
       m_last_row;
 
+  // Threshold를 기준으로 read/write중 어떤 mode를 선택할 건지 결정
   if (m_config->seperate_write_queue_enabled) {
     if (m_mode == READ_MODE &&
         ((m_num_write_pending >= m_config->write_high_watermark)
@@ -135,13 +137,13 @@ dram_req_t *frfcfs_scheduler::schedule(unsigned bank, unsigned curr_row) {
     m_current_last_row = m_last_write_row;
   }
 
-  if (m_current_last_row[bank] == NULL) {
+  if (m_current_last_row[bank] == NULL) { // 현재 service되고 있는 row가 없다!
     if (m_current_queue[bank].empty()) return NULL;
 
     std::map<unsigned, std::list<std::list<dram_req_t *>::iterator> >::iterator
         bin_ptr = m_current_bins[bank].find(curr_row);
-    if (bin_ptr == m_current_bins[bank].end()) {
-      dram_req_t *req = m_current_queue[bank].back();
+    if (bin_ptr == m_current_bins[bank].end()) { //현재 serive되고 있던 row에 해당하는 list가 전부 소진되었을 경우
+      dram_req_t *req = m_current_queue[bank].back(); // FIFO 정책에 따라 request queue중에 가장 오래된 것을 다음 req로 설정
       bin_ptr = m_current_bins[bank].find(req->row);
       assert(bin_ptr !=
              m_current_bins[bank].end());  // where did the request go???
@@ -153,7 +155,7 @@ dram_req_t *frfcfs_scheduler::schedule(unsigned bank, unsigned curr_row) {
       rowhit = true;
     }
   }
-  std::list<dram_req_t *>::iterator next = m_current_last_row[bank]->back();
+  std::list<dram_req_t *>::iterator next = m_current_last_row[bank]->back(); //현재 req_list에서 하나 가져옴
   dram_req_t *req = (*next);
 
   // rowblp stats
@@ -174,9 +176,9 @@ dram_req_t *frfcfs_scheduler::schedule(unsigned bank, unsigned curr_row) {
 
   m_stats->concurrent_row_access[m_dram->id][bank]++;
   m_stats->row_access[m_dram->id][bank]++;
-  m_current_last_row[bank]->pop_back();
+  m_current_last_row[bank]->pop_back(); // 여기서 pop
 
-  m_current_queue[bank].erase(next);
+  m_current_queue[bank].erase(next); //여기서 request queue에 있는 동일한 req도 삭제
   if (m_current_last_row[bank]->empty()) {
     m_current_bins[bank].erase(req->row);
     m_current_last_row[bank] = NULL;
@@ -224,7 +226,7 @@ void dram_t::scheduler_frfcfs() {
     req->data->set_status(IN_PARTITION_MC_INPUT_QUEUE,
                           m_gpu->gpu_sim_cycle + m_gpu->gpu_tot_sim_cycle);
     sched->add_req(req);
-  }
+  } // mrqq에 있는 모든 req를 schedular에 담는다.
 
   dram_req_t *req;
   unsigned i;
