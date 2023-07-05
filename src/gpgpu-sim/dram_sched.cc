@@ -235,6 +235,7 @@ void dram_t::scheduler_frfcfs() {
     unsigned b = (i + prio) % m_config->nbk;
     if (!bk[b]->mrq) {
       req = sched->schedule(b, bk[b]->curr_row);
+      //req 선택
 
       if (req) {
         req->data->set_status(IN_PARTITION_MC_BANK_ARB_QUEUE,
