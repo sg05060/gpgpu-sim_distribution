@@ -32,6 +32,9 @@
 #include "shader.h"
 #include "visualizer.h"
 
+// sm_next_mf_request_uid : static member variable
+// sm에서 만들어지는 mf_request마다 고유한 id부여
+// 간단하게 1씩 증가시키면서 각각에 부여
 unsigned mem_fetch::sm_next_mf_request_uid = 1;
 
 mem_fetch::mem_fetch(const mem_access_t &access, const warp_inst_t *inst,
@@ -43,21 +46,21 @@ mem_fetch::mem_fetch(const mem_access_t &access, const warp_inst_t *inst,
 
 {
   m_request_uid = sm_next_mf_request_uid++;
-  m_access = access;
+  m_access = access; // memory access information을 나타냄.
   if (inst) {
-    m_inst = *inst;
+    m_inst = *inst; // inst는 warp_inst_t(warp instruction)를 가르키는 포인터,
     assert(wid == m_inst.warp_id());
   }
   m_data_size = access.get_size();
-  m_ctrl_size = ctrl_size;
-  m_sid = sid;
-  m_tpc = tpc;
-  m_wid = wid;
+  m_ctrl_size = ctrl_size; //control_size?
+  m_sid = sid; // SM_id
+  m_tpc = tpc; // TPC(Thread Processing Cluster) within the shader core that issued the request.
+  m_wid = wid; // warp_id
   config->m_address_mapping.addrdec_tlx(access.get_addr(), &m_raw_addr);
   m_partition_addr =
       config->m_address_mapping.partition_address(access.get_addr());
   m_type = m_access.is_write() ? WRITE_REQUEST : READ_REQUEST;
-  m_timestamp = cycle;
+  m_timestamp = cycle; // cycle = memory fetch가 init될때의 cycle
   m_timestamp2 = 0;
   m_status = MEM_FETCH_INITIALIZED;
   m_status_change = cycle;

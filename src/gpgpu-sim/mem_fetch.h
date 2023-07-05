@@ -130,17 +130,18 @@ class mem_fetch {
 
  private:
   // request source information
-  unsigned m_request_uid;
-  unsigned m_sid;
-  unsigned m_tpc;
-  unsigned m_wid;
+  unsigned m_request_uid; // C: unique identifier for the memory fetch request.
+  unsigned m_sid; // C: Shader Core(SM) ID
+  unsigned m_tpc; // C: Thread Processing Cluster within the shader core that issued the request.
+  unsigned m_wid; // C: Warp ID within the TPC that issued the request.
 
   // where is this request now?
-  enum mem_fetch_status m_status;
-  unsigned long long m_status_change;
+  enum mem_fetch_status m_status; // C: Current status of memory fetch request.
+  unsigned long long m_status_change; // C : Cycle at which the status of the memory fetch
+                                      // request was last changed.
 
   // request type, address, size, mask
-  mem_access_t m_access;
+  mem_access_t m_access; // C: Memory acces details, including the type(read or write), address, size, mask.
   unsigned m_data_size;  // how much data is being written
   unsigned
       m_ctrl_size;  // how big would all this meta data be in hardware (does not
@@ -150,23 +151,24 @@ class mem_fetch {
                          // (partition bank select bits squeezed out)
   addrdec_t m_raw_addr;  // raw physical address (i.e., decoded DRAM
                          // chip-row-bank-column address)
-  enum mf_type m_type;
+  enum mf_type m_type; // C: request type[read,write, read reply, write ack]
 
   // statistics
   unsigned
       m_timestamp;  // set to gpu_sim_cycle+gpu_tot_sim_cycle at struct creation
+                    // C: Timestamp of when the memory fetch request
   unsigned m_timestamp2;  // set to gpu_sim_cycle+gpu_tot_sim_cycle when pushed
                           // onto icnt to shader; only used for reads
   unsigned m_icnt_receive_time;  // set to gpu_sim_cycle + interconnect_latency
                                  // when fixed icnt latency mode is enabled
-
+                                 // C: Time at which the memory_fetch request is received by the ICNT
   // requesting instruction (put last so mem_fetch prints nicer in gdb)
-  warp_inst_t m_inst;
+  warp_inst_t m_inst; // C: Warp instruction
 
   static unsigned sm_next_mf_request_uid;
 
   const memory_config *m_mem_config;
-  unsigned icnt_flit_size;
+  unsigned icnt_flit_size; // C: ICNT flit(data packet) size in byte
 
   mem_fetch
       *original_mf;  // this pointer is set up when a request is divided into
@@ -174,6 +176,7 @@ class mem_fetch {
                      // size), so the pointer refers to the original request
   mem_fetch *original_wr_mf;  // this pointer refers to the original write req,
                               // when fetch-on-write policy is used
+                              // C: what is fetch-on-write??
 };
 
 #endif
